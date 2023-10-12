@@ -1,4 +1,4 @@
-module github.com/stneto1/load-balancer
+module github.com/stneto1/load-balancer-echo-server
 
 go 1.21.1
 
