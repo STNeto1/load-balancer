@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"sync/atomic"
 
@@ -61,39 +62,48 @@ func main() {
 type Endpoint struct {
 	Label       string
 	Destination string
+	Weight      int64
 }
 
 type Balancer struct {
-	Endpoints []*Endpoint
-	Load      map[string]*int64
+	Endpoints   []*Endpoint
+	Load        map[string]*int64
+	TotalWeight int64
 }
 
 func CreateBalancer() *Balancer {
 	return &Balancer{
-		Endpoints: []*Endpoint{},
-		Load:      map[string]*int64{},
+		Endpoints:   []*Endpoint{},
+		Load:        map[string]*int64{},
+		TotalWeight: 0,
 	}
 }
 
 func (b *Balancer) Register(e *Endpoint) {
 	b.Endpoints = append(b.Endpoints, e)
 	b.Load[e.Label] = new(int64)
+	b.TotalWeight += e.Weight
 }
 
 func (b *Balancer) Next() *Endpoint {
-	min := b.Endpoints[0]
+
+	val := randomValue(b.TotalWeight)
 
 	for _, e := range b.Endpoints {
-		if *b.Load[e.Label] < *b.Load[min.Label] {
-			min = e
+		val -= e.Weight
+		if val <= 0 {
+			return e
 		}
 	}
 
-	atomic.AddInt64(b.Load[min.Label], 1)
-
-	return min
+	// Fallback
+	return b.Endpoints[0]
 }
 
 func (b *Balancer) Return(e *Endpoint) {
 	atomic.AddInt64(b.Load[e.Label], -1)
+}
+
+func randomValue(max int64) int64 {
+	return 1 + rand.Int63n(max)
 }
