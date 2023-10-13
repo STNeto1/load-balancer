@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync/atomic"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func main() {
@@ -28,11 +26,11 @@ func main() {
 
 	app := fiber.New()
 
-	app.Use(logger.New())
+	// app.Use(logger.New())
 
 	app.All("/", func(c *fiber.Ctx) error {
 		end := balancer.Next()
-		defer balancer.Return(end)
+		// defer balancer.Return(end)
 
 		httpReq, err := http.NewRequest(http.MethodGet, end.Destination, c.Request().BodyStream())
 		if err != nil {
@@ -65,35 +63,21 @@ type Endpoint struct {
 
 type Balancer struct {
 	Endpoints []*Endpoint
-	Load      map[string]*int64
 }
 
 func CreateBalancer() *Balancer {
 	return &Balancer{
 		Endpoints: []*Endpoint{},
-		Load:      map[string]*int64{},
 	}
 }
 
 func (b *Balancer) Register(e *Endpoint) {
 	b.Endpoints = append(b.Endpoints, e)
-	b.Load[e.Label] = new(int64)
 }
 
 func (b *Balancer) Next() *Endpoint {
-	min := b.Endpoints[0]
+	first := b.Endpoints[0]
+	b.Endpoints = append(b.Endpoints[1:], first)
 
-	for _, e := range b.Endpoints {
-		if *b.Load[e.Label] < *b.Load[min.Label] {
-			min = e
-		}
-	}
-
-	atomic.AddInt64(b.Load[min.Label], 1)
-
-	return min
-}
-
-func (b *Balancer) Return(e *Endpoint) {
-	atomic.AddInt64(b.Load[e.Label], -1)
+	return first
 }
