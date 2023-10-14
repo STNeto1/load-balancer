@@ -5,10 +5,8 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"sync/atomic"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func main() {
@@ -17,10 +15,12 @@ func main() {
 	end1 := &Endpoint{
 		Label:       "end1",
 		Destination: "http://127.0.0.1:3000/a",
+		Weight:      60,
 	}
 	end2 := &Endpoint{
 		Label:       "end2",
 		Destination: "http://127.0.0.1:3000/b",
+		Weight:      40,
 	}
 
 	balancer := CreateBalancer()
@@ -29,11 +29,10 @@ func main() {
 
 	app := fiber.New()
 
-	app.Use(logger.New())
+	// app.Use(logger.New())
 
 	app.All("/", func(c *fiber.Ctx) error {
 		end := balancer.Next()
-		defer balancer.Return(end)
 
 		httpReq, err := http.NewRequest(http.MethodGet, end.Destination, c.Request().BodyStream())
 		if err != nil {
@@ -67,43 +66,37 @@ type Endpoint struct {
 
 type Balancer struct {
 	Endpoints   []*Endpoint
-	Load        map[string]*int64
 	TotalWeight int64
 }
 
 func CreateBalancer() *Balancer {
 	return &Balancer{
 		Endpoints:   []*Endpoint{},
-		Load:        map[string]*int64{},
 		TotalWeight: 0,
 	}
 }
 
 func (b *Balancer) Register(e *Endpoint) {
 	b.Endpoints = append(b.Endpoints, e)
-	b.Load[e.Label] = new(int64)
 	b.TotalWeight += e.Weight
 }
 
 func (b *Balancer) Next() *Endpoint {
-
 	val := randomValue(b.TotalWeight)
 
 	for _, e := range b.Endpoints {
 		val -= e.Weight
+
 		if val <= 0 {
 			return e
 		}
+
 	}
 
-	// Fallback
-	return b.Endpoints[0]
+	first := b.Endpoints[0]
+	return first
 }
 
-func (b *Balancer) Return(e *Endpoint) {
-	atomic.AddInt64(b.Load[e.Label], -1)
-}
-
-func randomValue(max int64) int64 {
-	return 1 + rand.Int63n(max)
+func randomValue(maxVal int64) int64 {
+	return 1 + rand.Int63n(maxVal)
 }
